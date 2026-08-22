@@ -56,6 +56,12 @@ func (i *Identity) SelfSignedCertificate() (tls.Certificate, error) {
 	return tls.X509KeyPair(certPEM, keyPEM)
 }
 
+// CertificateDER returns the leaf certificate as raw DER bytes, suitable for
+// exchange during pairing.
+func (i *Identity) CertificateDER() ([]byte, error) {
+	return i.selfSignedDER()
+}
+
 // CertificatePEM returns the leaf certificate in PEM form, suitable for
 // persistence and for exchange during pairing.
 func (i *Identity) CertificatePEM() ([]byte, error) {
@@ -70,19 +76,30 @@ func (i *Identity) CertificatePEM() ([]byte, error) {
 // and belongs to the pinned public key. It is used by the TLS verification
 // callback to authenticate a paired peer.
 func VerifyPinnedCert(pinned ed25519.PublicKey, certDER []byte) error {
-	cert, err := x509.ParseCertificate(certDER)
+	pub, err := SelfSignedPublicKey(certDER)
 	if err != nil {
-		return fmt.Errorf("parse peer certificate: %w", err)
-	}
-	if err := cert.CheckSignature(cert.SignatureAlgorithm, cert.RawTBSCertificate, cert.Signature); err != nil {
-		return fmt.Errorf("peer certificate is not self-signed: %w", err)
-	}
-	pub, ok := cert.PublicKey.(ed25519.PublicKey)
-	if !ok {
-		return fmt.Errorf("peer certificate public key is %T, want ed25519.PublicKey", cert.PublicKey)
+		return err
 	}
 	if !pub.Equal(pinned) {
 		return fmt.Errorf("peer certificate public key does not match pinned key")
 	}
 	return nil
+}
+
+// SelfSignedPublicKey parses certDER, verifies the self-signature, and returns
+// the certificate's Ed25519 public key. It proves the presenter holds the
+// corresponding private key.
+func SelfSignedPublicKey(certDER []byte) (ed25519.PublicKey, error) {
+	cert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		return nil, fmt.Errorf("parse peer certificate: %w", err)
+	}
+	if err := cert.CheckSignature(cert.SignatureAlgorithm, cert.RawTBSCertificate, cert.Signature); err != nil {
+		return nil, fmt.Errorf("peer certificate is not self-signed: %w", err)
+	}
+	pub, ok := cert.PublicKey.(ed25519.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("peer certificate public key is %T, want ed25519.PublicKey", cert.PublicKey)
+	}
+	return pub, nil
 }
