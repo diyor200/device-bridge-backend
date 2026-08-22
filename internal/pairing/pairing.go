@@ -25,6 +25,15 @@ type Store interface {
 	AddPeer(deviceID, name string, pub ed25519.PublicKey) error
 }
 
+// Verify checks that p is self-consistent (device ID is the hash of the public
+// key, and the certificate is self-signed by that key) and returns its Info.
+func Verify(p *protocol.Pair) (Info, error) {
+	if err := verifyIdentity(p); err != nil {
+		return Info{}, err
+	}
+	return Info{DeviceID: p.DeviceID, Name: p.Name, PublicKey: p.PublicKey}, nil
+}
+
 // Session runs the pairing handshake over an established connection. The
 // connection is expected to already be encrypted and authenticated by the
 // transport layer (TLS with pinned keys); the exchange here verifies the peer's
@@ -45,26 +54,12 @@ func NewSession(rw io.ReadWriter, self *identity.Identity, store Store) *Session
 	}
 }
 
-// Exchange sends our identity (with name) and receives and verifies the peer's
-// identity, returning it.
+// Exchange sends our identity and receives and verifies the peer's identity,
+// returning it. It is the initiator side (send first, then receive).
 func (s *Session) Exchange(name string) (Info, error) {
-	cert, err := s.self.CertificateDER()
-	if err != nil {
-		return Info{}, fmt.Errorf("pairing: certificate: %w", err)
+	if err := s.sendIdentity(name); err != nil {
+		return Info{}, err
 	}
-	msg, err := protocol.NewMessage(protocol.TypePair, protocol.Pair{
-		DeviceID:    string(s.self.DeviceID()),
-		Name:        name,
-		PublicKey:   s.self.PublicKey(),
-		Certificate: cert,
-	})
-	if err != nil {
-		return Info{}, fmt.Errorf("pairing: build message: %w", err)
-	}
-	if err := s.ch.Send(msg); err != nil {
-		return Info{}, fmt.Errorf("pairing: send: %w", err)
-	}
-
 	resp, err := s.ch.Receive()
 	if err != nil {
 		return Info{}, fmt.Errorf("pairing: receive: %w", err)
@@ -76,12 +71,12 @@ func (s *Session) Exchange(name string) (Info, error) {
 	if err := resp.DecodePayload(&p); err != nil {
 		return Info{}, fmt.Errorf("pairing: decode: %w", err)
 	}
-	if err := verifyIdentity(&p); err != nil {
+	info, err := Verify(&p)
+	if err != nil {
 		return Info{}, err
 	}
-
-	s.peer = Info{DeviceID: p.DeviceID, Name: p.Name, PublicKey: p.PublicKey}
-	return s.peer, nil
+	s.peer = info
+	return info, nil
 }
 
 // Confirm persists the peer from the last successful exchange as trusted.
@@ -90,6 +85,26 @@ func (s *Session) Confirm() error {
 		return fmt.Errorf("pairing: no peer exchanged to confirm")
 	}
 	return s.store.AddPeer(s.peer.DeviceID, s.peer.Name, s.peer.PublicKey)
+}
+
+func (s *Session) sendIdentity(name string) error {
+	cert, err := s.self.CertificateDER()
+	if err != nil {
+		return fmt.Errorf("pairing: certificate: %w", err)
+	}
+	msg, err := protocol.NewMessage(protocol.TypePair, protocol.Pair{
+		DeviceID:    string(s.self.DeviceID()),
+		Name:        name,
+		PublicKey:   s.self.PublicKey(),
+		Certificate: cert,
+	})
+	if err != nil {
+		return fmt.Errorf("pairing: build message: %w", err)
+	}
+	if err := s.ch.Send(msg); err != nil {
+		return fmt.Errorf("pairing: send: %w", err)
+	}
+	return nil
 }
 
 // verifyIdentity checks that the peer's claimed identity is self-consistent:

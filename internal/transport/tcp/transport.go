@@ -92,7 +92,9 @@ func buildTLSConfig(cfg Config) (*tls.Config, error) {
 }
 
 // verifyPeer returns the TLS callback that authenticates a peer certificate:
-// self-signed and present in the trust store.
+// self-signed and, when trust is non-nil, present in the trust store. A nil
+// trust store accepts any self-signed certificate, leaving trust enforcement to
+// the application layer (used for pairing).
 func verifyPeer(trust transport.TrustStore) func([][]byte, [][]*x509.Certificate) error {
 	return func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 		if len(rawCerts) == 0 {
@@ -102,7 +104,7 @@ func verifyPeer(trust transport.TrustStore) func([][]byte, [][]*x509.Certificate
 		if err != nil {
 			return err
 		}
-		if trust == nil || !trust.Trusted(pub) {
+		if trust != nil && !trust.Trusted(pub) {
 			return errors.New("tcp: peer public key is not trusted")
 		}
 		return nil

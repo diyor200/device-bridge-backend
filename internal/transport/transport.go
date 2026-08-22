@@ -5,6 +5,7 @@ package transport
 
 import (
 	"context"
+	"crypto/ed25519"
 	"io"
 	"net"
 )
@@ -26,6 +27,9 @@ type Connection interface {
 	// PeerDeviceID returns the authenticated remote device ID, extracted from
 	// the peer's verified certificate.
 	PeerDeviceID() string
+	// PeerPublicKey returns the remote device's public key, extracted from the
+	// peer's verified certificate.
+	PeerPublicKey() ed25519.PublicKey
 }
 
 // Listener accepts incoming encrypted connections.

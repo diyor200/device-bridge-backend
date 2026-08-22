@@ -1,6 +1,7 @@
 package tcp
 
 import (
+	"crypto/ed25519"
 	"crypto/tls"
 	"net"
 	"time"
@@ -20,6 +21,17 @@ func (c *conn) PeerDeviceID() string {
 		return ""
 	}
 	return state.PeerCertificates[0].Subject.CommonName
+}
+
+// PeerPublicKey returns the remote device's public key from the verified peer
+// certificate.
+func (c *conn) PeerPublicKey() ed25519.PublicKey {
+	state := c.Conn.ConnectionState()
+	if len(state.PeerCertificates) == 0 {
+		return nil
+	}
+	pub, _ := state.PeerCertificates[0].PublicKey.(ed25519.PublicKey)
+	return pub
 }
 
 // listener accepts TLS connections, performing the handshake eagerly so that

@@ -22,6 +22,7 @@ const (
 	TypeFileCancel       MessageType = "FILE_CANCEL"
 	TypePing             MessageType = "PING"
 	TypePong             MessageType = "PONG"
+	TypeMessage          MessageType = "MESSAGE"
 )
 
 // Message is the generic control-channel envelope. The payload is kept as raw
@@ -78,6 +79,11 @@ type ClipboardUpdate struct {
 
 // ClipboardRequest asks a peer to send its current clipboard content.
 type ClipboardRequest struct{}
+
+// Text is a free-form text message exchanged between paired devices.
+type Text struct {
+	Text string `json:"text"`
+}
 
 // FileOffer advertises an outgoing file.
 type FileOffer struct {
