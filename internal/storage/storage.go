@@ -50,6 +50,12 @@ CREATE TABLE IF NOT EXISTS peers (
     name       TEXT NOT NULL,
     public_key BLOB NOT NULL,
     paired_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS clipboard_history (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    text       TEXT NOT NULL,
+    created_at INTEGER NOT NULL
 );`
 	if _, err := db.Exec(schema); err != nil {
 		return fmt.Errorf("storage: migrate: %w", err)
